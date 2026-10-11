@@ -2,7 +2,7 @@ from tkinter import messagebox, ttk
 
 import customtkinter as ctk
 
-from src import database
+from src import database, validators
 
 CATEGORIES = ["Starters", "Main Course", "Breads", "Rice", "Desserts", "Beverages", "Snacks"]
 
@@ -26,11 +26,15 @@ class ItemDialog(ctk.CTkToplevel):
     def __init__(self, master, title, on_save, initial=None, exclude_id=None):
         super().__init__(master)
         self.title(title)
-        self.geometry("400x470")
+        self.geometry("400x540")
         self.resizable(False, False)
         self.on_save = on_save
         self.exclude_id = exclude_id
         self.transient(master.winfo_toplevel())
+
+        self.categories = list(CATEGORIES)
+        if initial and initial[1] not in self.categories:
+            self.categories.append(initial[1])
 
         ctk.CTkLabel(
             self, text=title, font=ctk.CTkFont(size=22, weight="bold")
@@ -46,7 +50,9 @@ class ItemDialog(ctk.CTkToplevel):
         self.hint_label.pack(anchor="w", padx=30, pady=(0, 8))
 
         ctk.CTkLabel(self, text="Category").pack(anchor="w", padx=30)
-        self.category_box = ctk.CTkComboBox(self, values=CATEGORIES, height=36)
+        self.category_box = ctk.CTkComboBox(
+            self, values=self.categories, height=36, state="readonly"
+        )
         self.category_box.set("Main Course")
         self.category_box.pack(fill="x", padx=30, pady=(4, 12))
 
@@ -71,6 +77,8 @@ class ItemDialog(ctk.CTkToplevel):
         ctk.CTkButton(
             buttons, text="Save", height=38, command=self.save
         ).grid(row=0, column=1, padx=(6, 0), sticky="ew")
+
+        self.default_border = self.name_entry.cget("border_color")
 
         if initial:
             self.name_entry.insert(0, initial[0])
@@ -119,24 +127,35 @@ class ItemDialog(ctk.CTkToplevel):
         else:
             self.hint_label.configure(text="")
 
-    def save(self):
-        name = self.name_entry.get().strip()
-        category = self.category_box.get().strip()
-        price_text = self.price_entry.get().strip()
+    def reset_borders(self):
+        for widget in (self.name_entry, self.category_box, self.price_entry):
+            widget.configure(border_color=self.default_border)
 
-        if not name:
-            self.error_label.configure(text="Item name is required.")
-            return
-        if not category:
-            self.error_label.configure(text="Category is required.")
-            return
-        try:
-            price = float(price_text)
-        except ValueError:
-            self.error_label.configure(text="Price must be a number.")
-            return
-        if price <= 0:
-            self.error_label.configure(text="Price must be greater than 0.")
+    def save(self):
+        # Q06 - Pre-add Validation: check every field before saving
+        self.reset_borders()
+        errors = []
+
+        name = validators.clean_name(self.name_entry.get())
+        category = self.category_box.get().strip()
+
+        name_error = validators.validate_name(name)
+        if name_error:
+            errors.append(name_error)
+            self.name_entry.configure(border_color=RED)
+
+        category_error = validators.validate_category(category, self.categories)
+        if category_error:
+            errors.append(category_error)
+            self.category_box.configure(border_color=RED)
+
+        price, price_error = validators.validate_price(self.price_entry.get())
+        if price_error:
+            errors.append(price_error)
+            self.price_entry.configure(border_color=RED)
+
+        if errors:
+            self.error_label.configure(text="\n".join(f"- {message}" for message in errors))
             return
 
         error = self.on_save(name, category, price)
