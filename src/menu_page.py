@@ -6,20 +6,30 @@ from src import database
 
 CATEGORIES = ["Starters", "Main Course", "Breads", "Rice", "Desserts", "Beverages", "Snacks"]
 
+RED = "#e74c3c"
+ORANGE = "#e67e22"
+
+
+def normalize(text):
+    """Lower-case and remove extra spaces, used to compare item names."""
+    return " ".join(text.lower().split())
+
 
 class ItemDialog(ctk.CTkToplevel):
     """Popup form used to enter menu item details.
 
     on_save(name, category, price) must return None on success,
     or an error message (string) which is shown inside the form.
+    exclude_id: item that is being edited (ignored in the duplicate search).
     """
 
-    def __init__(self, master, title, on_save, initial=None):
+    def __init__(self, master, title, on_save, initial=None, exclude_id=None):
         super().__init__(master)
         self.title(title)
-        self.geometry("400x430")
+        self.geometry("400x470")
         self.resizable(False, False)
         self.on_save = on_save
+        self.exclude_id = exclude_id
         self.transient(master.winfo_toplevel())
 
         ctk.CTkLabel(
@@ -28,7 +38,12 @@ class ItemDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(self, text="Item Name").pack(anchor="w", padx=30)
         self.name_entry = ctk.CTkEntry(self, height=36, placeholder_text="e.g. Paneer Butter Masala")
-        self.name_entry.pack(fill="x", padx=30, pady=(4, 12))
+        self.name_entry.pack(fill="x", padx=30, pady=(4, 2))
+        self.name_entry.bind("<KeyRelease>", lambda event: self.update_search_hint())
+
+        # Q06 - Search Before Add: live hint about existing items
+        self.hint_label = ctk.CTkLabel(self, text="", wraplength=340, justify="left")
+        self.hint_label.pack(anchor="w", padx=30, pady=(0, 8))
 
         ctk.CTkLabel(self, text="Category").pack(anchor="w", padx=30)
         self.category_box = ctk.CTkComboBox(self, values=CATEGORIES, height=36)
@@ -39,7 +54,7 @@ class ItemDialog(ctk.CTkToplevel):
         self.price_entry = ctk.CTkEntry(self, height=36, placeholder_text="e.g. 250")
         self.price_entry.pack(fill="x", padx=30, pady=(4, 8))
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#e74c3c", wraplength=340, justify="left")
+        self.error_label = ctk.CTkLabel(self, text="", text_color=RED, wraplength=340, justify="left")
         self.error_label.pack(anchor="w", padx=30)
 
         buttons = ctk.CTkFrame(self, fg_color="transparent")
@@ -67,6 +82,42 @@ class ItemDialog(ctk.CTkToplevel):
     def focus_dialog(self):
         self.grab_set()
         self.name_entry.focus()
+
+    def find_matches(self, text):
+        """Return (similar_names, exact_found) for the typed name."""
+        typed = normalize(text)
+        if len(typed) < 2:
+            return [], False
+
+        similar = []
+        exact = False
+        for item_id, name, category, price in database.get_all_items():
+            if item_id == self.exclude_id:
+                continue
+            existing = normalize(name)
+            if existing == typed:
+                exact = True
+                similar.append(name)
+            elif typed in existing or existing in typed:
+                similar.append(name)
+        return similar, exact
+
+    def update_search_hint(self):
+        similar, exact = self.find_matches(self.name_entry.get())
+        if exact:
+            self.hint_label.configure(
+                text="This item already exists in the menu. It cannot be added again.",
+                text_color=RED,
+            )
+        elif similar:
+            shown = ", ".join(similar[:3])
+            more = f" (+{len(similar) - 3} more)" if len(similar) > 3 else ""
+            self.hint_label.configure(
+                text=f"Similar items already in menu: {shown}{more}",
+                text_color=ORANGE,
+            )
+        else:
+            self.hint_label.configure(text="")
 
     def save(self):
         name = self.name_entry.get().strip()
@@ -132,6 +183,13 @@ class MenuPage(ctk.CTkFrame):
             command=self.delete_selected,
         ).pack(side="left")
 
+        # Q06 - Search Before Add: search box to check the menu first
+        self.search_entry = ctk.CTkEntry(
+            toolbar, width=260, height=38, placeholder_text="Search menu items..."
+        )
+        self.search_entry.pack(side="right")
+        self.search_entry.bind("<KeyRelease>", lambda event: self.refresh())
+
         table_frame = ctk.CTkFrame(self, corner_radius=12)
         table_frame.grid(row=3, column=0, sticky="nsew")
         table_frame.grid_columnconfigure(0, weight=1)
@@ -194,9 +252,13 @@ class MenuPage(ctk.CTkFrame):
         style.map("Menu.Treeview.Heading", background=[("active", "#17537f")])
 
     def refresh(self):
+        query = normalize(self.search_entry.get())
+
         for row in self.tree.get_children():
             self.tree.delete(row)
         for item_id, name, category, price in database.get_all_items():
+            if query and query not in normalize(name) and query not in normalize(category):
+                continue
             self.tree.insert("", "end", values=(item_id, name, category, f"Rs. {price:.2f}"))
 
     def get_selected_item(self):
@@ -234,6 +296,7 @@ class MenuPage(ctk.CTkFrame):
             "Edit Menu Item",
             lambda n, c, p: self.update_item(item_id, n, c, p),
             initial=(name, category, price),
+            exclude_id=item_id,
         )
 
     def update_item(self, item_id, name, category, price):
