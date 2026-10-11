@@ -115,6 +115,15 @@ class MenuPage(ctk.CTkFrame):
             hover_color="#b9770e",
             command=self.open_edit_dialog,
         ).pack(side="left", padx=10)
+        ctk.CTkButton(
+            toolbar,
+            text="Delete Item",
+            height=38,
+            width=130,
+            fg_color="#c0392b",
+            hover_color="#992d22",
+            command=self.delete_selected,
+        ).pack(side="left")
 
         table_frame = ctk.CTkFrame(self, corner_radius=12)
         table_frame.grid(row=3, column=0, sticky="nsew")
@@ -219,3 +228,18 @@ class MenuPage(ctk.CTkFrame):
     def update_item(self, item_id, name, category, price):
         database.update_item(item_id, name, category, price)
         self.refresh()
+
+    # ---------- Delete ----------
+    def delete_selected(self):
+        item = self.get_selected_item()
+        if item is None:
+            messagebox.showinfo("Select an item", "Please select an item from the table first.")
+            return
+        item_id, name, category, price = item
+        confirm = messagebox.askyesno(
+            "Confirm Delete",
+            f"Are you sure you want to delete '{name}'?\nThis action cannot be undone.",
+        )
+        if confirm:
+            database.delete_item(item_id)
+            self.refresh()
