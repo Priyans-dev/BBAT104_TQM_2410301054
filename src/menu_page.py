@@ -8,7 +8,11 @@ CATEGORIES = ["Starters", "Main Course", "Breads", "Rice", "Desserts", "Beverage
 
 
 class ItemDialog(ctk.CTkToplevel):
-    """Popup form used to enter menu item details."""
+    """Popup form used to enter menu item details.
+
+    on_save(name, category, price) must return None on success,
+    or an error message (string) which is shown inside the form.
+    """
 
     def __init__(self, master, title, on_save, initial=None):
         super().__init__(master)
@@ -35,7 +39,7 @@ class ItemDialog(ctk.CTkToplevel):
         self.price_entry = ctk.CTkEntry(self, height=36, placeholder_text="e.g. 250")
         self.price_entry.pack(fill="x", padx=30, pady=(4, 8))
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#e74c3c")
+        self.error_label = ctk.CTkLabel(self, text="", text_color="#e74c3c", wraplength=340, justify="left")
         self.error_label.pack(anchor="w", padx=30)
 
         buttons = ctk.CTkFrame(self, fg_color="transparent")
@@ -84,7 +88,10 @@ class ItemDialog(ctk.CTkToplevel):
             self.error_label.configure(text="Price must be greater than 0.")
             return
 
-        self.on_save(name, category, price)
+        error = self.on_save(name, category, price)
+        if error:
+            self.error_label.configure(text=error)
+            return
         self.destroy()
 
 
@@ -208,8 +215,12 @@ class MenuPage(ctk.CTkFrame):
         ItemDialog(self, "Add Menu Item", self.add_item)
 
     def add_item(self, name, category, price):
-        database.add_item(name, category, price)
+        try:
+            database.add_item(name, category, price)
+        except database.DuplicateItemError:
+            return f"'{name}' already exists in the menu. Duplicate items are not allowed."
         self.refresh()
+        return None
 
     # ---------- Update ----------
     def open_edit_dialog(self):
@@ -226,8 +237,12 @@ class MenuPage(ctk.CTkFrame):
         )
 
     def update_item(self, item_id, name, category, price):
-        database.update_item(item_id, name, category, price)
+        try:
+            database.update_item(item_id, name, category, price)
+        except database.DuplicateItemError:
+            return f"'{name}' already exists in the menu. Duplicate items are not allowed."
         self.refresh()
+        return None
 
     # ---------- Delete ----------
     def delete_selected(self):

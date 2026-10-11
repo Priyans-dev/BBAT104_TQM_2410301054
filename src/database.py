@@ -10,6 +10,10 @@ DB_PATH = os.path.join(BASE_DIR, "restaurant.db")
 TAX_RATE = 0.05
 
 
+class DuplicateItemError(Exception):
+    """Raised when a menu item with the same name already exists."""
+
+
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA foreign_keys = ON")
@@ -58,8 +62,30 @@ def init_db():
         """
     )
 
+    enforce_unique_menu_names(cur)
+
     conn.commit()
     conn.close()
+
+
+def enforce_unique_menu_names(cur):
+    """Q06 - Unique constraint: no two menu items may share the same name
+    (ignoring capital letters and extra spaces)."""
+    # Remove any old duplicates first (the oldest item is kept)
+    cur.execute(
+        """
+        DELETE FROM menu_items
+        WHERE item_id NOT IN (
+            SELECT MIN(item_id) FROM menu_items GROUP BY LOWER(TRIM(name))
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_menu_unique_name
+        ON menu_items (LOWER(TRIM(name)))
+        """
+    )
 
 
 # ---------- Menu item operations (CRUD) ----------
@@ -67,12 +93,17 @@ def init_db():
 def add_item(name, category, price):
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO menu_items (name, category, price) VALUES (?, ?, ?)",
-        (name, category, price),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        cur.execute(
+            "INSERT INTO menu_items (name, category, price) VALUES (?, ?, ?)",
+            (name, category, price),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        raise DuplicateItemError(name)
+    finally:
+        conn.close()
 
 
 def get_all_items():
@@ -87,12 +118,17 @@ def get_all_items():
 def update_item(item_id, name, category, price):
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(
-        "UPDATE menu_items SET name = ?, category = ?, price = ? WHERE item_id = ?",
-        (name, category, price, item_id),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        cur.execute(
+            "UPDATE menu_items SET name = ?, category = ?, price = ? WHERE item_id = ?",
+            (name, category, price, item_id),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        raise DuplicateItemError(name)
+    finally:
+        conn.close()
 
 
 def delete_item(item_id):
@@ -120,7 +156,8 @@ def create_bill(cart_items):
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT COUNT(*) FROM bills")
+    # Q06 - Unique bill ID: always one more than the highest existing number
+    cur.execute("SELECT COALESCE(MAX(CAST(SUBSTR(bill_id, 6) AS INTEGER)), 0) FROM bills")
     bill_id = f"BILL-{cur.fetchone()[0] + 1:04d}"
     bill_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
