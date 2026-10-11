@@ -1,6 +1,7 @@
 import customtkinter as ctk
 
 from src import database
+from src.menu_page import MenuPage
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -63,6 +64,7 @@ class App(ctk.CTk):
 
     def toggle_theme(self):
         ctk.set_appearance_mode("dark" if self.theme_switch.get() else "light")
+        self.pages["Menu"].apply_theme()
 
     # ---------- Pages ----------
     def build_pages(self):
@@ -72,7 +74,7 @@ class App(ctk.CTk):
         self.container.grid_rowconfigure(0, weight=1)
 
         self.pages["Dashboard"] = self.make_dashboard()
-        self.pages["Menu"] = self.make_placeholder("Menu", "Menu management will be added in the next step.")
+        self.pages["Menu"] = MenuPage(self.container)
         self.pages["Billing"] = self.make_placeholder("Billing", "Billing will be added in a later step.")
         self.pages["Bill History"] = self.make_placeholder("Bill History", "Bill history will be added in a later step.")
 
@@ -124,6 +126,8 @@ class App(ctk.CTk):
                 btn.configure(fg_color="transparent", text_color=("gray10", "gray90"))
         if name == "Dashboard":
             self.refresh_stats()
+        elif name == "Menu":
+            self.pages["Menu"].refresh()
 
     def refresh_stats(self):
         conn = database.get_connection()
