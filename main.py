@@ -2,6 +2,7 @@ import customtkinter as ctk
 
 from src import database
 from src.billing_page import BillingPage
+from src.history_page import HistoryPage
 from src.menu_page import MenuPage
 
 ctk.set_appearance_mode("dark")
@@ -77,7 +78,7 @@ class App(ctk.CTk):
         self.pages["Dashboard"] = self.make_dashboard()
         self.pages["Menu"] = MenuPage(self.container)
         self.pages["Billing"] = BillingPage(self.container)
-        self.pages["Bill History"] = self.make_placeholder("Bill History", "Bill history will be added in the next step.")
+        self.pages["Bill History"] = HistoryPage(self.container)
 
         for page in self.pages.values():
             page.grid(row=0, column=0, sticky="nsew")
@@ -110,14 +111,6 @@ class App(ctk.CTk):
 
         return page
 
-    def make_placeholder(self, title, message):
-        page = ctk.CTkFrame(self.container, fg_color="transparent")
-        ctk.CTkLabel(
-            page, text=title, font=ctk.CTkFont(size=30, weight="bold")
-        ).grid(row=0, column=0, sticky="w")
-        ctk.CTkLabel(page, text=message, text_color="gray").grid(row=1, column=0, sticky="w", pady=10)
-        return page
-
     def show_page(self, name):
         self.pages[name].tkraise()
         for btn_name, btn in self.nav_buttons.items():
@@ -131,6 +124,8 @@ class App(ctk.CTk):
             self.pages["Menu"].refresh()
         elif name == "Billing":
             self.pages["Billing"].refresh_menu()
+        elif name == "Bill History":
+            self.pages["Bill History"].refresh()
 
     def refresh_stats(self):
         conn = database.get_connection()
