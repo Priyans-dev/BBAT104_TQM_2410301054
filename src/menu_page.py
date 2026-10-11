@@ -1,4 +1,4 @@
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 import customtkinter as ctk
 
@@ -106,6 +106,15 @@ class MenuPage(ctk.CTkFrame):
         ctk.CTkButton(
             toolbar, text="+ Add Item", height=38, width=130, command=self.open_add_dialog
         ).pack(side="left")
+        ctk.CTkButton(
+            toolbar,
+            text="Edit Item",
+            height=38,
+            width=130,
+            fg_color="#d68910",
+            hover_color="#b9770e",
+            command=self.open_edit_dialog,
+        ).pack(side="left", padx=10)
 
         table_frame = ctk.CTkFrame(self, corner_radius=12)
         table_frame.grid(row=3, column=0, sticky="nsew")
@@ -128,6 +137,7 @@ class MenuPage(ctk.CTkFrame):
         self.tree.column("name", width=300, anchor="w")
         self.tree.column("category", width=180, anchor="w")
         self.tree.column("price", width=130, anchor="e")
+        self.tree.bind("<Double-1>", lambda event: self.open_edit_dialog())
 
         scrollbar = ctk.CTkScrollbar(table_frame, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
@@ -173,9 +183,39 @@ class MenuPage(ctk.CTkFrame):
         for item_id, name, category, price in database.get_all_items():
             self.tree.insert("", "end", values=(item_id, name, category, f"Rs. {price:.2f}"))
 
+    def get_selected_item(self):
+        """Return (item_id, name, category, price) of the selected row, or None."""
+        selection = self.tree.selection()
+        if not selection:
+            return None
+        item_id = int(self.tree.item(selection[0])["values"][0])
+        for row in database.get_all_items():
+            if row[0] == item_id:
+                return row
+        return None
+
+    # ---------- Add ----------
     def open_add_dialog(self):
         ItemDialog(self, "Add Menu Item", self.add_item)
 
     def add_item(self, name, category, price):
         database.add_item(name, category, price)
+        self.refresh()
+
+    # ---------- Update ----------
+    def open_edit_dialog(self):
+        item = self.get_selected_item()
+        if item is None:
+            messagebox.showinfo("Select an item", "Please select an item from the table first.")
+            return
+        item_id, name, category, price = item
+        ItemDialog(
+            self,
+            "Edit Menu Item",
+            lambda n, c, p: self.update_item(item_id, n, c, p),
+            initial=(name, category, price),
+        )
+
+    def update_item(self, item_id, name, category, price):
+        database.update_item(item_id, name, category, price)
         self.refresh()
