@@ -4,12 +4,95 @@ import customtkinter as ctk
 
 from src import database
 
+CATEGORIES = ["Starters", "Main Course", "Breads", "Rice", "Desserts", "Beverages", "Snacks"]
+
+
+class ItemDialog(ctk.CTkToplevel):
+    """Popup form used to enter menu item details."""
+
+    def __init__(self, master, title, on_save, initial=None):
+        super().__init__(master)
+        self.title(title)
+        self.geometry("400x430")
+        self.resizable(False, False)
+        self.on_save = on_save
+        self.transient(master.winfo_toplevel())
+
+        ctk.CTkLabel(
+            self, text=title, font=ctk.CTkFont(size=22, weight="bold")
+        ).pack(anchor="w", padx=30, pady=(25, 15))
+
+        ctk.CTkLabel(self, text="Item Name").pack(anchor="w", padx=30)
+        self.name_entry = ctk.CTkEntry(self, height=36, placeholder_text="e.g. Paneer Butter Masala")
+        self.name_entry.pack(fill="x", padx=30, pady=(4, 12))
+
+        ctk.CTkLabel(self, text="Category").pack(anchor="w", padx=30)
+        self.category_box = ctk.CTkComboBox(self, values=CATEGORIES, height=36)
+        self.category_box.set("Main Course")
+        self.category_box.pack(fill="x", padx=30, pady=(4, 12))
+
+        ctk.CTkLabel(self, text="Price (Rs.)").pack(anchor="w", padx=30)
+        self.price_entry = ctk.CTkEntry(self, height=36, placeholder_text="e.g. 250")
+        self.price_entry.pack(fill="x", padx=30, pady=(4, 8))
+
+        self.error_label = ctk.CTkLabel(self, text="", text_color="#e74c3c")
+        self.error_label.pack(anchor="w", padx=30)
+
+        buttons = ctk.CTkFrame(self, fg_color="transparent")
+        buttons.pack(fill="x", padx=30, pady=15)
+        buttons.grid_columnconfigure((0, 1), weight=1)
+        ctk.CTkButton(
+            buttons,
+            text="Cancel",
+            height=38,
+            fg_color="gray40",
+            hover_color="gray30",
+            command=self.destroy,
+        ).grid(row=0, column=0, padx=(0, 6), sticky="ew")
+        ctk.CTkButton(
+            buttons, text="Save", height=38, command=self.save
+        ).grid(row=0, column=1, padx=(6, 0), sticky="ew")
+
+        if initial:
+            self.name_entry.insert(0, initial[0])
+            self.category_box.set(initial[1])
+            self.price_entry.insert(0, str(initial[2]))
+
+        self.after(150, self.focus_dialog)
+
+    def focus_dialog(self):
+        self.grab_set()
+        self.name_entry.focus()
+
+    def save(self):
+        name = self.name_entry.get().strip()
+        category = self.category_box.get().strip()
+        price_text = self.price_entry.get().strip()
+
+        if not name:
+            self.error_label.configure(text="Item name is required.")
+            return
+        if not category:
+            self.error_label.configure(text="Category is required.")
+            return
+        try:
+            price = float(price_text)
+        except ValueError:
+            self.error_label.configure(text="Price must be a number.")
+            return
+        if price <= 0:
+            self.error_label.configure(text="Price must be greater than 0.")
+            return
+
+        self.on_save(name, category, price)
+        self.destroy()
+
 
 class MenuPage(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master, fg_color="transparent")
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(3, weight=1)
 
         ctk.CTkLabel(
             self, text="Menu", font=ctk.CTkFont(size=30, weight="bold")
@@ -18,8 +101,14 @@ class MenuPage(ctk.CTkFrame):
             self, text="All menu items of the restaurant", text_color="gray"
         ).grid(row=1, column=0, sticky="w", pady=(0, 15))
 
+        toolbar = ctk.CTkFrame(self, fg_color="transparent")
+        toolbar.grid(row=2, column=0, sticky="ew", pady=(0, 12))
+        ctk.CTkButton(
+            toolbar, text="+ Add Item", height=38, width=130, command=self.open_add_dialog
+        ).pack(side="left")
+
         table_frame = ctk.CTkFrame(self, corner_radius=12)
-        table_frame.grid(row=2, column=0, sticky="nsew")
+        table_frame.grid(row=3, column=0, sticky="nsew")
         table_frame.grid_columnconfigure(0, weight=1)
         table_frame.grid_rowconfigure(0, weight=1)
 
@@ -83,3 +172,10 @@ class MenuPage(ctk.CTkFrame):
             self.tree.delete(row)
         for item_id, name, category, price in database.get_all_items():
             self.tree.insert("", "end", values=(item_id, name, category, f"Rs. {price:.2f}"))
+
+    def open_add_dialog(self):
+        ItemDialog(self, "Add Menu Item", self.add_item)
+
+    def add_item(self, name, category, price):
+        database.add_item(name, category, price)
+        self.refresh()
