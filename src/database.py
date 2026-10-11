@@ -1,9 +1,13 @@
 import os
 import sqlite3
+from datetime import datetime
 
 # Database file is created in the project root folder
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "restaurant.db")
+
+# Tax rate applied on every bill (5%)
+TAX_RATE = 0.05
 
 
 def get_connection():
@@ -97,6 +101,68 @@ def delete_item(item_id):
     cur.execute("DELETE FROM menu_items WHERE item_id = ?", (item_id,))
     conn.commit()
     conn.close()
+
+
+# ---------- Billing operations ----------
+
+def calculate_totals(cart_items):
+    """cart_items: list of (name, price, quantity). Returns (subtotal, tax, total)."""
+    subtotal = sum(price * qty for _, price, qty in cart_items)
+    tax = round(subtotal * TAX_RATE, 2)
+    total = round(subtotal + tax, 2)
+    return round(subtotal, 2), tax, total
+
+
+def create_bill(cart_items):
+    """Save a bill with all its items. Returns (bill_id, subtotal, tax, total)."""
+    subtotal, tax, total = calculate_totals(cart_items)
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT COUNT(*) FROM bills")
+    bill_id = f"BILL-{cur.fetchone()[0] + 1:04d}"
+    bill_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    cur.execute(
+        "INSERT INTO bills (bill_id, bill_date, subtotal, tax, total) VALUES (?, ?, ?, ?, ?)",
+        (bill_id, bill_date, subtotal, tax, total),
+    )
+    for name, price, qty in cart_items:
+        cur.execute(
+            """
+            INSERT INTO bill_items (bill_id, item_name, price, quantity, line_total)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (bill_id, name, price, qty, round(price * qty, 2)),
+        )
+
+    conn.commit()
+    conn.close()
+    return bill_id, subtotal, tax, total
+
+
+def get_all_bills():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT bill_id, bill_date, subtotal, tax, total FROM bills ORDER BY bill_date DESC, bill_id DESC"
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def get_bill_items(bill_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT item_name, price, quantity, line_total FROM bill_items WHERE bill_id = ?",
+        (bill_id,),
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return rows
 
 
 if __name__ == "__main__":

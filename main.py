@@ -1,6 +1,7 @@
 import customtkinter as ctk
 
 from src import database
+from src.billing_page import BillingPage
 from src.menu_page import MenuPage
 
 ctk.set_appearance_mode("dark")
@@ -75,8 +76,8 @@ class App(ctk.CTk):
 
         self.pages["Dashboard"] = self.make_dashboard()
         self.pages["Menu"] = MenuPage(self.container)
-        self.pages["Billing"] = self.make_placeholder("Billing", "Billing will be added in a later step.")
-        self.pages["Bill History"] = self.make_placeholder("Bill History", "Bill history will be added in a later step.")
+        self.pages["Billing"] = BillingPage(self.container)
+        self.pages["Bill History"] = self.make_placeholder("Bill History", "Bill history will be added in the next step.")
 
         for page in self.pages.values():
             page.grid(row=0, column=0, sticky="nsew")
@@ -128,6 +129,8 @@ class App(ctk.CTk):
             self.refresh_stats()
         elif name == "Menu":
             self.pages["Menu"].refresh()
+        elif name == "Billing":
+            self.pages["Billing"].refresh_menu()
 
     def refresh_stats(self):
         conn = database.get_connection()
