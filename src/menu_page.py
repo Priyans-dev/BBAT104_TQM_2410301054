@@ -21,15 +21,18 @@ class ItemDialog(ctk.CTkToplevel):
     on_save(name, category, price) must return None on success,
     or an error message (string) which is shown inside the form.
     exclude_id: item that is being edited (ignored in the duplicate search).
+    confirm_builder(name, category, price): returns the text of the
+    confirmation question that is asked before saving.
     """
 
-    def __init__(self, master, title, on_save, initial=None, exclude_id=None):
+    def __init__(self, master, title, on_save, initial=None, exclude_id=None, confirm_builder=None):
         super().__init__(master)
         self.title(title)
         self.geometry("400x540")
         self.resizable(False, False)
         self.on_save = on_save
         self.exclude_id = exclude_id
+        self.confirm_builder = confirm_builder
         self.transient(master.winfo_toplevel())
 
         self.categories = list(CATEGORIES)
@@ -157,6 +160,21 @@ class ItemDialog(ctk.CTkToplevel):
         if errors:
             self.error_label.configure(text="\n".join(f"- {message}" for message in errors))
             return
+
+        # Exact duplicate: show the error directly, no need to ask for confirmation
+        _, exact = self.find_matches(name)
+        if exact:
+            self.name_entry.configure(border_color=RED)
+            self.error_label.configure(
+                text=f"'{name}' already exists in the menu. Duplicate items are not allowed."
+            )
+            return
+
+        # Q06 - Confirmation Dialog: ask before saving
+        if self.confirm_builder:
+            question = self.confirm_builder(name, category, price)
+            if not messagebox.askyesno("Please Confirm", question, parent=self):
+                return
 
         error = self.on_save(name, category, price)
         if error:
@@ -293,7 +311,15 @@ class MenuPage(ctk.CTkFrame):
 
     # ---------- Add ----------
     def open_add_dialog(self):
-        ItemDialog(self, "Add Menu Item", self.add_item)
+        ItemDialog(
+            self,
+            "Add Menu Item",
+            self.add_item,
+            confirm_builder=lambda n, c, p: (
+                "Add this item to the menu?\n\n"
+                f"Name: {n}\nCategory: {c}\nPrice: Rs. {p:.2f}"
+            ),
+        )
 
     def add_item(self, name, category, price):
         try:
@@ -310,12 +336,22 @@ class MenuPage(ctk.CTkFrame):
             messagebox.showinfo("Select an item", "Please select an item from the table first.")
             return
         item_id, name, category, price = item
+
+        def build_question(new_name, new_category, new_price):
+            return (
+                "Update this menu item?\n\n"
+                f"Name: {name}  ->  {new_name}\n"
+                f"Category: {category}  ->  {new_category}\n"
+                f"Price: Rs. {price:.2f}  ->  Rs. {new_price:.2f}"
+            )
+
         ItemDialog(
             self,
             "Edit Menu Item",
             lambda n, c, p: self.update_item(item_id, n, c, p),
             initial=(name, category, price),
             exclude_id=item_id,
+            confirm_builder=build_question,
         )
 
     def update_item(self, item_id, name, category, price):
