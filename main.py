@@ -1,3 +1,5 @@
+from tkinter import ttk
+
 import customtkinter as ctk
 
 from src import database
@@ -17,8 +19,8 @@ class App(ctk.CTk):
         database.init_db()
 
         self.title("Restaurant Billing System")
-        self.geometry("1100x680")
-        self.minsize(950, 580)
+        self.geometry("1100x700")
+        self.minsize(950, 640)
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -62,7 +64,15 @@ class App(ctk.CTk):
 
         self.theme_switch = ctk.CTkSwitch(sidebar, text="Dark mode", command=self.toggle_theme)
         self.theme_switch.select()
-        self.theme_switch.grid(row=6, column=0, padx=20, pady=25, sticky="w")
+        self.theme_switch.grid(row=6, column=0, padx=20, pady=(25, 12), sticky="w")
+
+        ctk.CTkLabel(
+            sidebar,
+            text="BBAT104 - TQM Project\nQ06: Reduce Duplicate Entries",
+            text_color="gray",
+            font=ctk.CTkFont(size=11),
+            justify="left",
+        ).grid(row=7, column=0, padx=20, pady=(0, 20), sticky="w")
 
     def toggle_theme(self):
         ctk.set_appearance_mode("dark" if self.theme_switch.get() else "light")
@@ -75,39 +85,101 @@ class App(ctk.CTk):
         self.container.grid_columnconfigure(0, weight=1)
         self.container.grid_rowconfigure(0, weight=1)
 
-        self.pages["Dashboard"] = self.make_dashboard()
+        # Menu page is created first because it sets up the shared table style
         self.pages["Menu"] = MenuPage(self.container)
         self.pages["Billing"] = BillingPage(self.container)
         self.pages["Bill History"] = HistoryPage(self.container)
+        self.pages["Dashboard"] = self.make_dashboard()
 
         for page in self.pages.values():
             page.grid(row=0, column=0, sticky="nsew")
 
     def make_dashboard(self):
         page = ctk.CTkFrame(self.container, fg_color="transparent")
-        page.grid_columnconfigure((0, 1, 2), weight=1)
+        page.grid_columnconfigure((0, 1), weight=1)
+        page.grid_rowconfigure(4, weight=1)
 
+        # Header with quick action buttons
+        header = ctk.CTkFrame(page, fg_color="transparent")
+        header.grid(row=0, column=0, columnspan=2, sticky="ew")
+        header.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
-            page, text="Dashboard", font=ctk.CTkFont(size=30, weight="bold")
-        ).grid(row=0, column=0, columnspan=3, sticky="w")
+            header, text="Dashboard", font=ctk.CTkFont(size=30, weight="bold")
+        ).grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(
-            page, text="Overview of your restaurant", text_color="gray"
-        ).grid(row=1, column=0, columnspan=3, sticky="w")
+            header, text="Overview of your restaurant", text_color="gray"
+        ).grid(row=1, column=0, sticky="w")
 
+        actions = ctk.CTkFrame(header, fg_color="transparent")
+        actions.grid(row=0, column=1, rowspan=2, sticky="e")
+        ctk.CTkButton(
+            actions,
+            text="+ New Bill",
+            height=38,
+            width=120,
+            fg_color="#1e8449",
+            hover_color="#186a3b",
+            command=lambda: self.show_page("Billing"),
+        ).pack(side="left")
+        ctk.CTkButton(
+            actions,
+            text="Manage Menu",
+            height=38,
+            width=120,
+            command=lambda: self.show_page("Menu"),
+        ).pack(side="left", padx=(8, 0))
+
+        # Stat cards (2 x 2)
+        cards = [
+            ("Menu Items", "#1f6aa5"),
+            ("Bills Generated", "#1e8449"),
+            ("Total Revenue", "#d68910"),
+            ("Duplicates Blocked", "#6c5ce7"),
+        ]
         self.stat_labels = {}
-        for col, title in enumerate(["Menu Items", "Bills Generated", "Total Revenue"]):
+        for index, (title, color) in enumerate(cards):
+            row, col = divmod(index, 2)
             card = ctk.CTkFrame(page, corner_radius=14)
             card.grid(
-                row=2,
+                row=1 + row,
                 column=col,
-                padx=(0 if col == 0 else 10, 0 if col == 2 else 10),
-                pady=25,
+                padx=(0 if col == 0 else 8, 8 if col == 0 else 0),
+                pady=(18 if row == 0 else 8, 0),
                 sticky="ew",
             )
-            ctk.CTkLabel(card, text=title, text_color="gray").pack(anchor="w", padx=20, pady=(18, 0))
-            value = ctk.CTkLabel(card, text="0", font=ctk.CTkFont(size=34, weight="bold"))
-            value.pack(anchor="w", padx=20, pady=(4, 18))
+            ctk.CTkFrame(card, height=4, corner_radius=2, fg_color=color).pack(
+                fill="x", padx=20, pady=(14, 0)
+            )
+            ctk.CTkLabel(card, text=title, text_color="gray").pack(anchor="w", padx=20, pady=(10, 0))
+            value = ctk.CTkLabel(card, text="0", font=ctk.CTkFont(size=30, weight="bold"))
+            value.pack(anchor="w", padx=20, pady=(2, 14))
             self.stat_labels[title] = value
+
+        # Recent bills table
+        ctk.CTkLabel(
+            page, text="Recent Bills", font=ctk.CTkFont(size=16, weight="bold")
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(20, 8))
+
+        table_frame = ctk.CTkFrame(page, corner_radius=12)
+        table_frame.grid(row=4, column=0, columnspan=2, sticky="nsew")
+        table_frame.grid_columnconfigure(0, weight=1)
+        table_frame.grid_rowconfigure(0, weight=1)
+
+        self.recent_tree = ttk.Treeview(
+            table_frame,
+            columns=("bill_id", "date", "total"),
+            show="headings",
+            style="Menu.Treeview",
+            selectmode="none",
+            height=5,
+        )
+        self.recent_tree.heading("bill_id", text="Bill ID")
+        self.recent_tree.heading("date", text="Date and Time")
+        self.recent_tree.heading("total", text="Total")
+        self.recent_tree.column("bill_id", width=120, anchor="center")
+        self.recent_tree.column("date", width=240, anchor="w")
+        self.recent_tree.column("total", width=140, anchor="e")
+        self.recent_tree.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
         return page
 
@@ -119,7 +191,7 @@ class App(ctk.CTk):
             else:
                 btn.configure(fg_color="transparent", text_color=("gray10", "gray90"))
         if name == "Dashboard":
-            self.refresh_stats()
+            self.refresh_dashboard()
         elif name == "Menu":
             self.pages["Menu"].refresh()
         elif name == "Billing":
@@ -127,18 +199,29 @@ class App(ctk.CTk):
         elif name == "Bill History":
             self.pages["Bill History"].refresh()
 
-    def refresh_stats(self):
+    def refresh_dashboard(self):
         conn = database.get_connection()
         cur = conn.cursor()
         cur.execute("SELECT COUNT(*) FROM menu_items")
         items = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*), COALESCE(SUM(total), 0) FROM bills")
         bills, revenue = cur.fetchone()
+        cur.execute("SELECT COUNT(*) FROM duplicate_attempts")
+        duplicates = cur.fetchone()[0]
         conn.close()
 
         self.stat_labels["Menu Items"].configure(text=str(items))
         self.stat_labels["Bills Generated"].configure(text=str(bills))
-        self.stat_labels["Total Revenue"].configure(text=f"Rs. {revenue:.2f}")
+        self.stat_labels["Total Revenue"].configure(text=f"Rs. {revenue:,.2f}")
+        self.stat_labels["Duplicates Blocked"].configure(text=str(duplicates))
+
+        for row in self.recent_tree.get_children():
+            self.recent_tree.delete(row)
+        recent = database.get_all_bills()[:6]
+        if not recent:
+            self.recent_tree.insert("", "end", values=("-", "No bills generated yet", "-"))
+        for bill_id, bill_date, subtotal, tax, total in recent:
+            self.recent_tree.insert("", "end", values=(bill_id, bill_date, f"Rs. {total:,.2f}"))
 
 
 if __name__ == "__main__":
