@@ -62,6 +62,18 @@ def init_db():
         """
     )
 
+    # Q06 - Duplicate Attempt Log: every blocked duplicate is recorded here
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS duplicate_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_name TEXT NOT NULL,
+            action TEXT NOT NULL,
+            attempt_time TEXT NOT NULL
+        )
+        """
+    )
+
     enforce_unique_menu_names(cur)
 
     conn.commit()
@@ -137,6 +149,32 @@ def delete_item(item_id):
     cur.execute("DELETE FROM menu_items WHERE item_id = ?", (item_id,))
     conn.commit()
     conn.close()
+
+
+# ---------- Duplicate attempt log ----------
+
+def log_duplicate_attempt(item_name, action):
+    """Record a blocked duplicate attempt. action is 'Add' or 'Update'."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO duplicate_attempts (item_name, action, attempt_time) VALUES (?, ?, ?)",
+        (item_name, action, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_duplicate_attempts():
+    """Return (attempt_time, item_name, action) rows, newest first."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT attempt_time, item_name, action FROM duplicate_attempts ORDER BY id DESC"
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return rows
 
 
 # ---------- Billing operations ----------

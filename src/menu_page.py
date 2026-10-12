@@ -15,6 +15,62 @@ def normalize(text):
     return " ".join(text.lower().split())
 
 
+class DuplicateLogDialog(ctk.CTkToplevel):
+    """Popup that lists every blocked duplicate attempt (Q06 - Duplicate Attempt Log)."""
+
+    def __init__(self, master):
+        super().__init__(master)
+        self.title("Duplicate Attempt Log")
+        self.geometry("560x460")
+        self.minsize(480, 360)
+        self.transient(master.winfo_toplevel())
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(2, weight=1)
+
+        ctk.CTkLabel(
+            self, text="Duplicate Attempt Log", font=ctk.CTkFont(size=22, weight="bold")
+        ).grid(row=0, column=0, sticky="w", padx=25, pady=(22, 2))
+
+        rows = database.get_duplicate_attempts()
+        ctk.CTkLabel(
+            self,
+            text=f"{len(rows)} duplicate attempt(s) were blocked by the system",
+            text_color="gray",
+        ).grid(row=1, column=0, sticky="w", padx=25, pady=(0, 12))
+
+        frame = ctk.CTkFrame(self, corner_radius=12)
+        frame.grid(row=2, column=0, sticky="nsew", padx=25)
+        frame.grid_columnconfigure(0, weight=1)
+        frame.grid_rowconfigure(0, weight=1)
+
+        tree = ttk.Treeview(
+            frame,
+            columns=("time", "name", "action"),
+            show="headings",
+            style="Menu.Treeview",
+            selectmode="browse",
+        )
+        tree.heading("time", text="Date and Time")
+        tree.heading("name", text="Item Name")
+        tree.heading("action", text="Action")
+        tree.column("time", width=170, anchor="w")
+        tree.column("name", width=220, anchor="w")
+        tree.column("action", width=80, anchor="center")
+        for attempt_time, item_name, action in rows:
+            tree.insert("", "end", values=(attempt_time, item_name, action))
+
+        scrollbar = ctk.CTkScrollbar(frame, command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=10)
+        scrollbar.grid(row=0, column=1, sticky="ns", padx=(0, 6), pady=10)
+
+        ctk.CTkButton(self, text="Close", height=38, command=self.destroy).grid(
+            row=3, column=0, sticky="ew", padx=25, pady=18
+        )
+        self.after(150, self.grab_set)
+
+
 class ItemDialog(ctk.CTkToplevel):
     """Popup form used to enter menu item details.
 
@@ -23,9 +79,11 @@ class ItemDialog(ctk.CTkToplevel):
     exclude_id: item that is being edited (ignored in the duplicate search).
     confirm_builder(name, category, price): returns the text of the
     confirmation question that is asked before saving.
+    action: 'Add' or 'Update', written in the duplicate attempt log.
     """
 
-    def __init__(self, master, title, on_save, initial=None, exclude_id=None, confirm_builder=None):
+    def __init__(self, master, title, on_save, initial=None, exclude_id=None,
+                 confirm_builder=None, action="Add"):
         super().__init__(master)
         self.title(title)
         self.geometry("400x540")
@@ -33,6 +91,7 @@ class ItemDialog(ctk.CTkToplevel):
         self.on_save = on_save
         self.exclude_id = exclude_id
         self.confirm_builder = confirm_builder
+        self.action = action
         self.transient(master.winfo_toplevel())
 
         self.categories = list(CATEGORIES)
@@ -161,9 +220,10 @@ class ItemDialog(ctk.CTkToplevel):
             self.error_label.configure(text="\n".join(f"- {message}" for message in errors))
             return
 
-        # Exact duplicate: show the error directly, no need to ask for confirmation
+        # Exact duplicate: log it and show the error directly (no confirmation needed)
         _, exact = self.find_matches(name)
         if exact:
+            database.log_duplicate_attempt(name, self.action)
             self.name_entry.configure(border_color=RED)
             self.error_label.configure(
                 text=f"'{name}' already exists in the menu. Duplicate items are not allowed."
@@ -199,30 +259,39 @@ class MenuPage(ctk.CTkFrame):
         toolbar = ctk.CTkFrame(self, fg_color="transparent")
         toolbar.grid(row=2, column=0, sticky="ew", pady=(0, 12))
         ctk.CTkButton(
-            toolbar, text="+ Add Item", height=38, width=130, command=self.open_add_dialog
+            toolbar, text="+ Add Item", height=38, width=120, command=self.open_add_dialog
         ).pack(side="left")
         ctk.CTkButton(
             toolbar,
             text="Edit Item",
             height=38,
-            width=130,
+            width=120,
             fg_color="#d68910",
             hover_color="#b9770e",
             command=self.open_edit_dialog,
-        ).pack(side="left", padx=10)
+        ).pack(side="left", padx=8)
         ctk.CTkButton(
             toolbar,
             text="Delete Item",
             height=38,
-            width=130,
+            width=120,
             fg_color="#c0392b",
             hover_color="#992d22",
             command=self.delete_selected,
         ).pack(side="left")
+        ctk.CTkButton(
+            toolbar,
+            text="Duplicate Log",
+            height=38,
+            width=120,
+            fg_color="#6c5ce7",
+            hover_color="#5848c2",
+            command=self.open_duplicate_log,
+        ).pack(side="left", padx=8)
 
         # Q06 - Search Before Add: search box to check the menu first
         self.search_entry = ctk.CTkEntry(
-            toolbar, width=260, height=38, placeholder_text="Search menu items..."
+            toolbar, width=230, height=38, placeholder_text="Search menu items..."
         )
         self.search_entry.pack(side="right")
         self.search_entry.bind("<KeyRelease>", lambda event: self.refresh())
@@ -309,6 +378,9 @@ class MenuPage(ctk.CTkFrame):
                 return row
         return None
 
+    def open_duplicate_log(self):
+        DuplicateLogDialog(self)
+
     # ---------- Add ----------
     def open_add_dialog(self):
         ItemDialog(
@@ -319,12 +391,14 @@ class MenuPage(ctk.CTkFrame):
                 "Add this item to the menu?\n\n"
                 f"Name: {n}\nCategory: {c}\nPrice: Rs. {p:.2f}"
             ),
+            action="Add",
         )
 
     def add_item(self, name, category, price):
         try:
             database.add_item(name, category, price)
         except database.DuplicateItemError:
+            database.log_duplicate_attempt(name, "Add")
             return f"'{name}' already exists in the menu. Duplicate items are not allowed."
         self.refresh()
         return None
@@ -352,12 +426,14 @@ class MenuPage(ctk.CTkFrame):
             initial=(name, category, price),
             exclude_id=item_id,
             confirm_builder=build_question,
+            action="Update",
         )
 
     def update_item(self, item_id, name, category, price):
         try:
             database.update_item(item_id, name, category, price)
         except database.DuplicateItemError:
+            database.log_duplicate_attempt(name, "Update")
             return f"'{name}' already exists in the menu. Duplicate items are not allowed."
         self.refresh()
         return None
