@@ -1,3 +1,4 @@
+from datetime import datetime
 from tkinter import ttk
 
 import customtkinter as ctk
@@ -11,6 +12,14 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
 ACCENT = "#1f6aa5"
+
+# (page name, small icon shown in the sidebar)
+NAV_ITEMS = [
+    ("Dashboard", "\u2302"),
+    ("Menu", "\u2630"),
+    ("Billing", "\u20b9"),
+    ("Bill History", "\u21ba"),
+]
 
 
 class App(ctk.CTk):
@@ -47,13 +56,14 @@ class App(ctk.CTk):
             justify="left",
         ).grid(row=0, column=0, padx=20, pady=(30, 30), sticky="w")
 
-        for i, name in enumerate(["Dashboard", "Menu", "Billing", "Bill History"], start=1):
+        for i, (name, icon) in enumerate(NAV_ITEMS, start=1):
             btn = ctk.CTkButton(
                 sidebar,
-                text=name,
+                text=f"  {icon}   {name}",
                 anchor="w",
-                height=42,
+                height=44,
                 corner_radius=8,
+                font=ctk.CTkFont(size=14),
                 fg_color="transparent",
                 text_color=("gray10", "gray90"),
                 hover_color=("gray70", "gray30"),
@@ -99,7 +109,7 @@ class App(ctk.CTk):
         page.grid_columnconfigure((0, 1), weight=1)
         page.grid_rowconfigure(4, weight=1)
 
-        # Header with quick action buttons
+        # Header with today's date and quick action buttons
         header = ctk.CTkFrame(page, fg_color="transparent")
         header.grid(row=0, column=0, columnspan=2, sticky="ew")
         header.grid_columnconfigure(0, weight=1)
@@ -107,7 +117,9 @@ class App(ctk.CTk):
             header, text="Dashboard", font=ctk.CTkFont(size=30, weight="bold")
         ).grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(
-            header, text="Overview of your restaurant", text_color="gray"
+            header,
+            text=datetime.now().strftime("%A, %d %B %Y"),
+            text_color="gray",
         ).grid(row=1, column=0, sticky="w")
 
         actions = ctk.CTkFrame(header, fg_color="transparent")

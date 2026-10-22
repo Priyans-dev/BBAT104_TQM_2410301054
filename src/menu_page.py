@@ -5,6 +5,7 @@ import customtkinter as ctk
 from src import database, validators
 
 CATEGORIES = ["Starters", "Main Course", "Breads", "Rice", "Desserts", "Beverages", "Snacks"]
+ALL_CATEGORIES = "All Categories"
 
 RED = "#e74c3c"
 ORANGE = "#e67e22"
@@ -247,7 +248,7 @@ class MenuPage(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master, fg_color="transparent")
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(3, weight=1)
+        self.grid_rowconfigure(4, weight=1)
 
         ctk.CTkLabel(
             self, text="Menu", font=ctk.CTkFont(size=30, weight="bold")
@@ -256,8 +257,9 @@ class MenuPage(ctk.CTkFrame):
             self, text="All menu items of the restaurant", text_color="gray"
         ).grid(row=1, column=0, sticky="w", pady=(0, 15))
 
+        # Row of action buttons
         toolbar = ctk.CTkFrame(self, fg_color="transparent")
-        toolbar.grid(row=2, column=0, sticky="ew", pady=(0, 12))
+        toolbar.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         ctk.CTkButton(
             toolbar, text="+ Add Item", height=38, width=120, command=self.open_add_dialog
         ).pack(side="left")
@@ -289,15 +291,30 @@ class MenuPage(ctk.CTkFrame):
             command=self.open_duplicate_log,
         ).pack(side="left", padx=8)
 
-        # Q06 - Search Before Add: search box to check the menu first
+        # Row of search and filter (Q06 - Search Before Add: check the menu first)
+        filters = ctk.CTkFrame(self, fg_color="transparent")
+        filters.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         self.search_entry = ctk.CTkEntry(
-            toolbar, width=230, height=38, placeholder_text="Search menu items..."
+            filters, width=260, height=36, placeholder_text="Search menu items..."
         )
-        self.search_entry.pack(side="right")
+        self.search_entry.pack(side="left")
         self.search_entry.bind("<KeyRelease>", lambda event: self.refresh())
 
+        self.category_filter = ctk.CTkOptionMenu(
+            filters,
+            values=[ALL_CATEGORIES] + CATEGORIES,
+            width=170,
+            height=36,
+            command=lambda value: self.refresh(),
+        )
+        self.category_filter.set(ALL_CATEGORIES)
+        self.category_filter.pack(side="left", padx=10)
+
+        self.count_label = ctk.CTkLabel(filters, text="", text_color="gray")
+        self.count_label.pack(side="right")
+
         table_frame = ctk.CTkFrame(self, corner_radius=12)
-        table_frame.grid(row=3, column=0, sticky="nsew")
+        table_frame.grid(row=4, column=0, sticky="nsew")
         table_frame.grid_columnconfigure(0, weight=1)
         table_frame.grid_rowconfigure(0, weight=1)
 
@@ -359,13 +376,22 @@ class MenuPage(ctk.CTkFrame):
 
     def refresh(self):
         query = normalize(self.search_entry.get())
+        selected_category = self.category_filter.get()
 
         for row in self.tree.get_children():
             self.tree.delete(row)
-        for item_id, name, category, price in database.get_all_items():
+
+        all_items = database.get_all_items()
+        shown = 0
+        for item_id, name, category, price in all_items:
+            if selected_category != ALL_CATEGORIES and category != selected_category:
+                continue
             if query and query not in normalize(name) and query not in normalize(category):
                 continue
             self.tree.insert("", "end", values=(item_id, name, category, f"Rs. {price:.2f}"))
+            shown += 1
+
+        self.count_label.configure(text=f"Showing {shown} of {len(all_items)} item(s)")
 
     def get_selected_item(self):
         """Return (item_id, name, category, price) of the selected row, or None."""

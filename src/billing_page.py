@@ -5,13 +5,17 @@ import customtkinter as ctk
 from src import database
 
 
+def normalize(text):
+    return " ".join(text.lower().split())
+
+
 class BillReceipt(ctk.CTkToplevel):
     """Popup that shows a generated bill like a printed receipt."""
 
     def __init__(self, master, bill_id, bill_date, items, subtotal, tax, total):
         super().__init__(master)
         self.title(f"Bill {bill_id}")
-        self.geometry("470x580")
+        self.geometry("470x600")
         self.resizable(False, False)
         self.transient(master.winfo_toplevel())
 
@@ -31,6 +35,8 @@ class BillReceipt(ctk.CTkToplevel):
         lines.append(f"{'Subtotal':<33}{subtotal:>10.2f}")
         lines.append(f"{tax_label:<33}{tax:>10.2f}")
         lines.append(f"{'TOTAL':<33}{total:>10.2f}")
+        lines.append("")
+        lines.append("Thank you! Visit again.".center(43))
         box.insert("1.0", "\n".join(lines))
         box.configure(state="disabled")
 
@@ -66,28 +72,34 @@ class BillingPage(ctk.CTkFrame):
         left = ctk.CTkFrame(self, corner_radius=12)
         left.grid(row=2, column=0, sticky="nsew", padx=(0, 8))
         left.grid_columnconfigure(0, weight=1)
-        left.grid_rowconfigure(1, weight=1)
+        left.grid_rowconfigure(2, weight=1)
 
         ctk.CTkLabel(
             left, text="Menu Items", font=ctk.CTkFont(size=16, weight="bold")
         ).grid(row=0, column=0, sticky="w", padx=15, pady=(12, 6))
 
+        self.search_entry = ctk.CTkEntry(left, height=36, placeholder_text="Search item or category...")
+        self.search_entry.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 8))
+        self.search_entry.bind("<KeyRelease>", lambda event: self.refresh_menu())
+
         self.menu_tree = ttk.Treeview(
             left,
-            columns=("name", "price"),
+            columns=("name", "category", "price"),
             show="headings",
             style="Menu.Treeview",
             selectmode="browse",
         )
         self.menu_tree.heading("name", text="Item Name")
+        self.menu_tree.heading("category", text="Category")
         self.menu_tree.heading("price", text="Price")
-        self.menu_tree.column("name", width=220, anchor="w")
-        self.menu_tree.column("price", width=90, anchor="e")
-        self.menu_tree.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        self.menu_tree.column("name", width=170, anchor="w")
+        self.menu_tree.column("category", width=100, anchor="w")
+        self.menu_tree.column("price", width=80, anchor="e")
+        self.menu_tree.grid(row=2, column=0, sticky="nsew", padx=10, pady=(0, 10))
         self.menu_tree.bind("<Double-1>", lambda event: self.add_to_cart())
 
         add_row = ctk.CTkFrame(left, fg_color="transparent")
-        add_row.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 12))
+        add_row.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 12))
         ctk.CTkLabel(add_row, text="Qty").pack(side="left")
         self.qty_entry = ctk.CTkEntry(add_row, width=70, height=36)
         self.qty_entry.insert(0, "1")
@@ -163,13 +175,17 @@ class BillingPage(ctk.CTkFrame):
 
     # ---------- Data refresh ----------
     def refresh_menu(self):
+        query = normalize(self.search_entry.get())
+
         for row in self.menu_tree.get_children():
             self.menu_tree.delete(row)
         self.menu_data = {}
         for item_id, name, category, price in database.get_all_items():
+            if query and query not in normalize(name) and query not in normalize(category):
+                continue
             iid = str(item_id)
             self.menu_data[iid] = (name, price)
-            self.menu_tree.insert("", "end", iid=iid, values=(name, f"Rs. {price:.2f}"))
+            self.menu_tree.insert("", "end", iid=iid, values=(name, category, f"Rs. {price:.2f}"))
 
     def refresh_cart(self):
         for row in self.cart_tree.get_children():
